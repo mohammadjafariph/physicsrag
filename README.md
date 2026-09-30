@@ -164,44 +164,13 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 | `RETRIEVAL_K`                                  | `8`                                    | evidence chunks per question |
 | `DATA_DIR`                                     | `./data`                               | papers, vectors, SQLite      |
 
-## 📁 Project layout
-
-```
-config.py            settings (pydantic-settings) + provider presets
-main.py              CLI entry point
-src/
-  llm/               provider-agnostic LLM layer (factory + adapters)
-  net/               curl_cffi compatibility (stable exception contract)
-  topic/             planner, deduplicator
-  search/            arXiv search, paper ranking
-  documents/         downloader, PDF loader, section-aware chunker
-  documents/latex.py arXiv LaTeX source fetch: real equations per chunk (Stage 5b)
-  embeddings/        local embedder
-  database/          Chroma vector store
-  retrieval/         hybrid retriever (BM25 + vectors + RRF + rerank)
-  analysis/          evidence analyzer (findings / gaps / candidates)
-  controller/        research-cycle controller + topic tree
-  memory/            SQLite research memory
-  service/           chat service, background run manager
-  api/               FastAPI app + routers
-web/                 zero-build SPA UI (vanilla JS, vendored KaTeX)
-tests/               pytest suite
-scripts/             asset generators (README hero banner)
-```
 
 ## 🧪 Tests
 
 ```bash
-python -m pytest    # 38 tests: config, providers, chunker, ranking,
+python -m pytest    # 59 tests: config, providers, chunker, ranking,
                     # memory/dedup, citations, network-failure safety
 ```
-
-## 🗺 Roadmap
-
-- [ ] Query history + saved threads (SQLite)
-- [ ] Optional API auth for non-localhost deployments
-- [ ] PDF viewer with jump-to-cited-page
-- [ ] Multi-root topic forests with named projects
 
 ## ✍️ Authorship
 
