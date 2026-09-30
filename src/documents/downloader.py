@@ -23,7 +23,7 @@ from pathlib import Path
 from curl_cffi import requests
 
 from config import METADATA_DIR, PAPERS_DIR
-from src.net import NETWORK_ERRORS
+from src.net import NETWORK_ERRORS, arxiv_pause, arxiv_register_failure
 from src.search.paper import Paper
 
 ARXIV_PDF_URL = "https://arxiv.org/pdf/{paper_id}"
@@ -96,8 +96,9 @@ def download_paper(
             metadata_path=str(metadata_path),
         )
 
-    # Pause before every network request: arXiv rate limits PDF fetches too.
-    time.sleep(request_delay)
+    # Shared throttle: spacing vs ALL other arXiv touchpoints, not just
+    # this downloader (search retries + e-print fetches share the budget).
+    time.sleep(arxiv_pause(min_interval=request_delay))
 
     try:
         url = ARXIV_PDF_URL.format(paper_id=paper.paper_id)
@@ -108,6 +109,7 @@ def download_paper(
         )
         response.raise_for_status()
     except NETWORK_ERRORS as error:
+        arxiv_register_failure(error)
         return DownloadResult(
             paper_id=paper.paper_id,
             status="failed",

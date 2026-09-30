@@ -30,7 +30,7 @@ from pathlib import Path
 from curl_cffi import requests
 
 from config import LATEX_DIR
-from src.net import NETWORK_ERRORS
+from src.net import NETWORK_ERRORS, arxiv_pause, arxiv_register_failure
 
 ARXIV_EPRINT_URL = "https://arxiv.org/e-print/{paper_id}"
 
@@ -71,7 +71,7 @@ def fetch_source(paper_id: str, request_delay: float = REQUEST_DELAY_SECONDS):
     """Raw bytes of the e-print bundle, or None if arXiv has no source."""
     import time
 
-    time.sleep(request_delay)  # arXiv rate limits e-print fetches too
+    time.sleep(arxiv_pause(min_interval=request_delay))
     try:
         response = requests.get(
             ARXIV_EPRINT_URL.format(paper_id=paper_id),
@@ -79,7 +79,8 @@ def fetch_source(paper_id: str, request_delay: float = REQUEST_DELAY_SECONDS):
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-    except NETWORK_ERRORS:
+    except NETWORK_ERRORS as error:
+        arxiv_register_failure(error)
         return None
     content = response.content
     if content[:15].lstrip().lower().startswith(b"<!doctype"):  # HTML error page

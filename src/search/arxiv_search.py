@@ -21,7 +21,12 @@ from urllib.parse import quote
 # and is a drop-in replacement for requests here.
 from curl_cffi import requests
 
-from src.net import NETWORK_ERRORS, RetrievalError
+from src.net import (
+    NETWORK_ERRORS,
+    RetrievalError,
+    arxiv_pause,
+    arxiv_register_failure,
+)
 from src.search.openalex import search_openalex
 from src.search.paper import Paper
 from src.search.rank import STOPWORDS as _STOPWORDS
@@ -133,11 +138,13 @@ def search_arxiv(
     re-raises so the caller's skip-and-continue logic still applies.
     """
     url = build_search_url(query, max_results=max_results)
-    for attempt, delay in enumerate((0.0,) + tuple(retry_delays)):
-        if delay:
-            print(f"  [retry] arXiv API — waiting {delay:.0f}s "
-                  f"(attempt {attempt + 1}/{1 + len(retry_delays)})")
-            time.sleep(delay)
+    for attempt in range(1 + len(retry_delays)):
+        if attempt:
+            print(f"  [retry] arXiv API (attempt {attempt + 1}/{1 + len(retry_delays)})")
+        wait = arxiv_pause()  # shared throttle: spacing + failure cooldown
+        if wait >= 1.0:
+            print(f"  [throttle] arXiv — waiting {wait:.0f}s before request")
+            time.sleep(wait)
         try:
             response = requests.get(
                 url,
@@ -147,6 +154,7 @@ def search_arxiv(
             response.raise_for_status()  # non-200 -> exception w/ status
             break
         except NETWORK_ERRORS as error:
+            arxiv_register_failure(error)  # 429/timeout cools the WHOLE pipeline
             if attempt == len(retry_delays):
                 raise
             print(f"  [retry] arXiv API: {error}")
@@ -193,7 +201,6 @@ def search_arxiv_relaxed(
             continue
         kept = terms[: n_kept - 1] + [terms[-1]]
         relaxed_query = " ".join(kept)
-        time.sleep(request_delay)  # each retry is its own API call
         papers = search_arxiv(relaxed_query, max_results=max_results)
         if papers:
             return papers, relaxed_query
@@ -216,10 +223,6 @@ def search_papers(
 
     for index, query in enumerate(queries):
         print(f"[search {index + 1}/{len(queries)}] {query}")
-        # arXiv rate limit: pause before every request except the first.
-        if index > 0:
-            time.sleep(request_delay)
-
         relaxed_query = None
         try:
             papers, relaxed_query = search_arxiv_relaxed(
