@@ -12,7 +12,7 @@
 An autonomous agent that explores arXiv, builds a searchable paper library,
 and answers questions with verifiable citations — with **any** LLM provider.
 
-[Features](#-features) · [Quickstart](#-quickstart) · [Providers](#-choose-your-llm-provider) · [Architecture](#-architecture) · [API](#-http-api) · [Config](#-configuration)
+[Features](#-features) · [Installation](#-installation) · [Providers](#-choose-your-llm-provider) · [Architecture](#-architecture) · [API](#-http-api) · [Config](#-configuration)
 
 </div>
 
@@ -50,19 +50,60 @@ and whichever LLM API you configure.
 - **🐳 Production-ready** — FastAPI + SSE, pytest suite, Docker, CI, and
   GHCR image publishing out of the box
 
-## 🚀 Quickstart
+## 🚀 Installation
 
-```bash
+Requires **Python 3.11+** — check with `python --version` (Windows) or
+`python3 --version` (macOS/Linux). All heavy deps (PyMuPDF, torch,
+sentence-transformers) ship as prebuilt wheels on all three platforms —
+no extra system packages needed.
+
+### Windows (PowerShell)
+
+```powershell
 git clone https://github.com/mohammadjafariph/physicsrag
 cd physicsrag
 python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt      # Windows
-copy .env.example .env                             # set LLM_PROVIDER + key
-.venv\Scripts\uvicorn src.api.server:app --reload
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env        # then set LLM_PROVIDER + LLM_API_KEY
+uvicorn src.api.server:app
 # open http://127.0.0.1:8000
 ```
 
-Or with Docker:
+### macOS
+
+```bash
+# if your python3 is older than 3.11: brew install python@3.11
+git clone https://github.com/mohammadjafariph/physicsrag
+cd physicsrag
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # then set LLM_PROVIDER + LLM_API_KEY
+python3 -m uvicorn src.api.server:app
+# open http://127.0.0.1:8000
+```
+
+### Linux (Debian/Ubuntu)
+
+```bash
+sudo apt update && sudo apt install -y python3 python3-venv python3-pip git
+git clone https://github.com/mohammadjafariph/physicsrag
+cd physicsrag
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # then set LLM_PROVIDER + LLM_API_KEY
+python3 -m uvicorn src.api.server:app
+# open http://127.0.0.1:8000
+```
+
+> **Note** — if the `uvicorn` command isn't found even inside an activated
+> venv, use the venv's interpreter directly:
+> `.venv\Scripts\python -m uvicorn src.api.server:app` (Windows) or
+> `.venv/bin/python -m uvicorn src.api.server:app` (macOS/Linux).
+
+### Or with Docker
 
 ```bash
 cp .env.example .env    # set your provider + key
@@ -168,7 +209,7 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 ## 🧪 Tests
 
 ```bash
-python -m pytest    # 59 tests: config, providers, chunker, ranking,
+python -m pytest    # 82 tests: config, providers, chunker, ranking,
                     # memory/dedup, citations, network-failure safety
 ```
 
