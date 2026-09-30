@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest>=8.0
+# asset generation (scripts/make_hero.py)
+pillow>=10.0
