@@ -332,6 +332,14 @@ function init() {
     askQuestion(question);
   });
 
+  // Enter sends, Shift+Enter adds a newline (like every modern chat).
+  $("#ask-input").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) {
+      ev.preventDefault();
+      $("#ask-form").requestSubmit();
+    }
+  });
+
   $("#paper-filter").addEventListener("input", renderPaperList);
 
   $("#run-form").addEventListener("submit", async (ev) => {
