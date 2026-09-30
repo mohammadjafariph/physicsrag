@@ -343,7 +343,7 @@ input:focus, select:focus, textarea:focus { border-color: #2dd4bf66; }
   overflow-x: auto;
   white-space: pre;
 }
-.hidden { display: none; }
+.hidden { display: none !important; }
 
 /* ---------- settings ---------- */
 .callout {
