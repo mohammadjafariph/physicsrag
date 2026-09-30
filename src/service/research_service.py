@@ -15,6 +15,7 @@ from collections import deque
 from datetime import datetime, timezone
 
 from src.controller.cycle import ResearchController, render_tree
+from src.net import RetrievalError
 from src.topic.planner import Topic
 
 RUN_ACTIVE_STATES = ("queued", "running")
@@ -107,6 +108,14 @@ class RunManager:
 
             run.tree = render_tree(controller.memory)
             run.status = "completed"
+        except RetrievalError as error:
+            run.status = "failed"
+            run.error = f"retrieval failed — cycles stopped: {error}"
+            run.log.append(
+                f"\n[error] {run.error}\n"
+                "[loop] stopping the run: no search backend reachable, "
+                "continuing would analyze zero evidence\n"
+            )
         except Exception as error:  # noqa: BLE001 — report, never die silently
             run.status = "failed"
             run.error = f"{type(error).__name__}: {error}"

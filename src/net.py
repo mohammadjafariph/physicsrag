@@ -27,3 +27,10 @@ NETWORK_ERRORS: tuple[type[Exception], ...] = (CurlError,)
 
 # Readable alias for call sites (same object as the modern RequestsError).
 RequestException = RequestsError
+
+
+class RetrievalError(RuntimeError):
+    """Raised when paper retrieval is impossible: every search query
+    failed on arXiv (after retries) AND on the OpenAlex fallback. Run
+    loops catch this and stop the cycles — continuing produces a
+    garbage analysis built on zero evidence."""

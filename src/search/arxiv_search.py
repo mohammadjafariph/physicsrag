@@ -21,7 +21,7 @@ from urllib.parse import quote
 # and is a drop-in replacement for requests here.
 from curl_cffi import requests
 
-from src.net import NETWORK_ERRORS
+from src.net import NETWORK_ERRORS, RetrievalError
 from src.search.openalex import search_openalex
 from src.search.paper import Paper
 from src.search.rank import STOPWORDS as _STOPWORDS
@@ -212,6 +212,7 @@ def search_papers(
     repeats from later queries. Insertion order is preserved.
     """
     merged: dict[str, Paper] = {}
+    n_failed = 0
 
     for index, query in enumerate(queries):
         print(f"[search {index + 1}/{len(queries)}] {query}")
@@ -228,12 +229,14 @@ def search_papers(
             # arXiv retries exhausted (429 / stalled connections): OpenAlex
             # indexes the same papers with arXiv ids, so search still works
             # even while arXiv's API tarpits us. PDFs still come from arXiv.
+            n_failed += 1
             print(f"  arXiv failed after retries ({type(error).__name__}) "
                   f"— trying OpenAlex fallback")
             try:
                 papers = search_openalex(query, max_results=results_per_query)
             except NETWORK_ERRORS as fallback_error:
                 print(f"  query failed, skipping (OpenAlex too): {fallback_error}")
+                n_failed += 1
                 continue
             if not papers:
                 print("  query failed, skipping (OpenAlex: no arXiv-keyed hits)")
@@ -245,6 +248,11 @@ def search_papers(
             merged.setdefault(paper.paper_id, paper)
         print(f"  {len(papers)} results (total unique: {len(merged)})")
 
+    if not merged and n_failed >= len(queries) and queries:
+        raise RetrievalError(
+            f"all {len(queries)} search queries failed: arXiv unavailable "
+            "(after retries) and the OpenAlex fallback did not answer"
+        )
     return list(merged.values())
 
 

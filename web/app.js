@@ -506,6 +506,7 @@ async function pollRun(runId) {
     $("#run-title").textContent = run.topic;
     $("#run-meta").textContent =
       `status: ${run.status}` + (run.error ? ` · ${run.error}` : "");
+    $("#run-meta").classList.toggle("error", run.status === "failed");
     const pct = Math.max(0, Math.min(100,
       Math.round((run.cycles_done / Math.max(1, run.max_cycles)) * 100)));
     $("#run-fill").style.width = pct + "%";

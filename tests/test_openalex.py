@@ -1,8 +1,10 @@
 """OpenAlex fallback tests: parsing, inverted-index abstracts, integration."""
 
 from types import SimpleNamespace
+
 from curl_cffi import CurlError
 
+from src.net import RetrievalError
 from src.search import arxiv_search, openalex
 from src.search.openalex import (
     extract_arxiv_id,
@@ -45,6 +47,32 @@ WORK_PUBLISHER_ONLY = {
     "abstract_inverted_index": {"text": [0]},
 }
 
+ARXIV_ENTRY_FEED = b"""<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>http://arxiv.org/abs/2304.12345v1</id>
+    <title>Test Paper</title>
+    <summary>An abstract about entanglement.</summary>
+    <author><name>A Author</name></author>
+    <category term="quant-ph"/>
+    <published>2023-04-12T00:00:00Z</published>
+    <updated>2023-04-12T00:00:00Z</updated>
+  </entry>
+</feed>"""
+
+ARXIV_EMPTY_FEED = b'<feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+
+
+class FakeResponse:
+    def __init__(self, content=b"", payload=None):
+        self.content = content
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
 
 def test_parse_work_builds_paper_with_arxiv_key():
     paper = parse_work(WORK_WITH_ARXIV)
@@ -62,22 +90,11 @@ def test_parse_work_skips_publisher_only_records():
     assert parse_work({**WORK_WITH_ARXIV, "abstract_inverted_index": None}) is None
 
 
-class FakeResponse:
-    def __init__(self, payload):
-        self._payload = payload
-
-    def raise_for_status(self):
-        return None
-
-    def json(self):
-        return self._payload
-
-
 def test_search_openalex_dedupes_and_filters(monkeypatch):
     payload = {"results": [WORK_WITH_ARXIV, WORK_PUBLISHER_ONLY,
                            dict(WORK_WITH_ARXIV)]}  # duplicate id
     monkeypatch.setattr(openalex, "requests",
-                        SimpleNamespace(get=lambda url, headers=None, timeout=None: FakeResponse(payload)))
+                        SimpleNamespace(get=lambda url, headers=None, timeout=None: FakeResponse(payload=payload)))
     papers = search_openalex("entanglement", max_results=10)
     assert [p.paper_id for p in papers] == ["2304.12345"]
 
@@ -91,14 +108,34 @@ def test_search_papers_falls_back_when_arxiv_down(monkeypatch):
     # OpenAlex: healthy
     payload = {"results": [WORK_WITH_ARXIV]}
     monkeypatch.setattr(openalex, "requests",
-                        SimpleNamespace(get=lambda url, headers=None, timeout=None: FakeResponse(payload)))
+                        SimpleNamespace(get=lambda url, headers=None, timeout=None: FakeResponse(payload=payload)))
 
     papers = arxiv_search.search_papers(["entanglement scaling"], results_per_query=5)
     assert len(papers) == 1
     assert papers[0].paper_id == "2304.12345"
 
 
-def test_search_papers_skips_when_both_down(monkeypatch):
+def test_zero_hits_after_healthy_search_is_not_an_error(monkeypatch):
+    # arXiv answers fine but the topic has no hits: NOT a retrieval failure.
+    monkeypatch.setattr(arxiv_search, "requests",
+                        SimpleNamespace(get=lambda url, headers=None, timeout=None:
+                                        FakeResponse(content=ARXIV_EMPTY_FEED)))
+    monkeypatch.setattr(arxiv_search.time, "sleep", lambda s: None)
+
+    assert arxiv_search.search_papers(["esoteric topic"], results_per_query=5) == []
+
+
+def test_search_papers_returns_papers_when_arxiv_healthy(monkeypatch):
+    monkeypatch.setattr(arxiv_search, "requests",
+                        SimpleNamespace(get=lambda url, headers=None, timeout=None:
+                                        FakeResponse(content=ARXIV_ENTRY_FEED)))
+    monkeypatch.setattr(arxiv_search.time, "sleep", lambda s: None)
+
+    papers = arxiv_search.search_papers(["entanglement"], results_per_query=5)
+    assert [p.paper_id for p in papers] == ["2304.12345"]
+
+
+def test_search_papers_raises_retrievalerror_when_both_down(monkeypatch):
     monkeypatch.setattr(arxiv_search, "requests",
                         SimpleNamespace(get=lambda url, headers=None, timeout=None: (_ for _ in ()).throw(CurlError("429"))))
     monkeypatch.setattr(arxiv_search.time, "sleep", lambda s: None)
@@ -106,4 +143,10 @@ def test_search_papers_skips_when_both_down(monkeypatch):
         raise CurlError("connection refused")
     monkeypatch.setattr(openalex, "requests", SimpleNamespace(get=openalex_fail))
 
-    assert arxiv_search.search_papers(["entanglement"], results_per_query=5) == []
+    try:
+        arxiv_search.search_papers(["entanglement"], results_per_query=5)
+        raised = False
+    except RetrievalError as error:
+        raised = True
+        assert "all 1 search queries failed" in str(error)
+    assert raised
