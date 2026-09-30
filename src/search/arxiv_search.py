@@ -22,6 +22,7 @@ from urllib.parse import quote
 from curl_cffi import requests
 
 from src.net import NETWORK_ERRORS
+from src.search.openalex import search_openalex
 from src.search.paper import Paper
 from src.search.rank import STOPWORDS as _STOPWORDS
 
@@ -218,14 +219,25 @@ def search_papers(
         if index > 0:
             time.sleep(request_delay)
 
+        relaxed_query = None
         try:
             papers, relaxed_query = search_arxiv_relaxed(
                 query, max_results=results_per_query
             )
         except NETWORK_ERRORS as error:
-            # One failed query must not kill the whole search batch.
-            print(f"  query failed, skipping: {error}")
-            continue
+            # arXiv retries exhausted (429 / stalled connections): OpenAlex
+            # indexes the same papers with arXiv ids, so search still works
+            # even while arXiv's API tarpits us. PDFs still come from arXiv.
+            print(f"  arXiv failed after retries ({type(error).__name__}) "
+                  f"— trying OpenAlex fallback")
+            try:
+                papers = search_openalex(query, max_results=results_per_query)
+            except NETWORK_ERRORS as fallback_error:
+                print(f"  query failed, skipping (OpenAlex too): {fallback_error}")
+                continue
+            if not papers:
+                print("  query failed, skipping (OpenAlex: no arXiv-keyed hits)")
+                continue
 
         if relaxed_query:
             print(f"  [relaxed] -> {relaxed_query!r}")
