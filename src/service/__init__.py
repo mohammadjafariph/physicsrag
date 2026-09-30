@@ -1,0 +1,1 @@
+"""Web-facing services: RAG chat and background research runs."""

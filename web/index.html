@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhysicsRAG — self-hosted paper intelligence</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">&Psi;</div>
+        <div class="brand-text">
+          <h1>PhysicsRAG</h1>
+          <span>self-hosted paper intelligence</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav-btn active" data-view="ask"><span class="nav-ico">&#9672;</span> Ask the library</button>
+        <button class="nav-btn" data-view="papers"><span class="nav-ico">&#8801;</span> Papers</button>
+        <button class="nav-btn" data-view="research"><span class="nav-ico">&#10227;</span> Research runs</button>
+        <button class="nav-btn" data-view="settings"><span class="nav-ico">&#9881;</span> Settings</button>
+      </nav>
+
+      <div class="side-panel">
+        <h2>Library</h2>
+        <div class="stat-grid" id="stats">
+          <div class="stat"><b id="stat-papers">&ndash;</b><span>papers</span></div>
+          <div class="stat"><b id="stat-chunks">&ndash;</b><span>chunks</span></div>
+          <div class="stat"><b id="stat-topics">&ndash;</b><span>topics</span></div>
+        </div>
+      </div>
+
+      <div class="side-footer">
+        <div class="provider-chip" id="provider-chip">provider: &hellip;</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- ============ ASK ============ -->
+      <section class="view active" id="view-ask">
+        <header class="view-head">
+          <h2>Ask the library</h2>
+          <p>Answers come only from retrieved chunks of your arXiv library, cited as <code>[n]</code>. Open a source card to verify a claim.</p>
+        </header>
+        <div class="chat" id="chat"></div>
+        <form class="composer" id="ask-form">
+          <textarea id="ask-input" rows="2"
+            placeholder="Ask about your papers &mdash; e.g. &ldquo;How does entanglement entropy scale at the MIPT critical point?&rdquo;"></textarea>
+          <button class="btn primary" type="submit" id="ask-btn">Send</button>
+        </form>
+      </section>
+
+      <!-- ============ PAPERS ============ -->
+      <section class="view" id="view-papers">
+        <header class="view-head">
+          <h2>Papers</h2>
+          <p>Everything downloaded and indexed by the pipeline.</p>
+        </header>
+        <div class="toolbar">
+          <input id="paper-filter" type="search" placeholder="Filter by title, author, arXiv id&hellip;" />
+        </div>
+        <div class="cards" id="paper-list"></div>
+      </section>
+
+      <!-- ============ RESEARCH ============ -->
+      <section class="view" id="view-research">
+        <header class="view-head">
+          <h2>Research runs</h2>
+          <p>Autonomous cycles: plan &rarr; search arXiv &rarr; download &rarr; embed &rarr; analyze &rarr; pick the next topic.</p>
+        </header>
+        <div class="research-grid">
+          <div class="panel">
+            <h3>New run</h3>
+            <form id="run-form" class="stack">
+              <label>Root topic
+                <input id="run-topic" type="text" minlength="3" required
+                  placeholder="e.g. Measurement-induced phase transitions" />
+              </label>
+              <label>Cycles
+                <select id="run-cycles">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+              <button class="btn primary" type="submit" id="run-btn">Start research run</button>
+            </form>
+            <div class="run-status hidden" id="run-status">
+              <div class="run-line"><span class="run-dot" id="run-dot"></span><b id="run-title"></b></div>
+              <div class="run-meta" id="run-meta"></div>
+              <pre class="log" id="run-log"></pre>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Topic tree</h3>
+            <pre class="tree" id="topic-tree">loading&hellip;</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="view" id="view-settings">
+        <header class="view-head">
+          <h2>Settings</h2>
+          <p>Point the pipeline at any provider. Saved values persist to <code>.env</code>; the key never leaves the server.</p>
+        </header>
+        <div class="panel narrow">
+          <form id="settings-form" class="stack">
+            <label>Provider
+              <select id="set-provider"></select>
+            </label>
+            <label>Model
+              <input id="set-model" type="text"
+                placeholder="e.g. openai/gpt-oss-120b, claude-sonnet-4-5, llama3.1:70b" />
+            </label>
+            <label>API key <span class="muted" id="set-key-state"></span>
+              <input id="set-key" type="password" placeholder="leave blank to keep the current key" autocomplete="off" />
+            </label>
+            <label>Base URL <span class="muted">(optional &mdash; overrides the provider default)</span>
+              <input id="set-base-url" type="text" placeholder="https://&hellip;/v1" />
+            </label>
+            <button class="btn primary" type="submit">Save settings</button>
+          </form>
+          <div class="callout">
+            Local models work too: install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>,
+            pull a model, then set provider <code>ollama</code> &mdash; no key needed.
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

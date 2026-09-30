@@ -1,0 +1,18 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# runtime data — papers, metadata, vector store, research memory, model cache
+# (everything under data/ is produced locally; run a research cycle to fill it)
+data/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
