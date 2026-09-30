@@ -58,7 +58,7 @@
       <section class="view" id="view-papers">
         <header class="view-head">
           <h2>Papers</h2>
-          <p>Everything downloaded and indexed by the pipeline.</p>
+          <p id="papers-subtitle">Everything downloaded and indexed by the pipeline.</p>
         </header>
         <div class="toolbar">
           <input id="paper-filter" type="search" placeholder="Filter by title, author, arXiv id&hellip;" />
@@ -126,7 +126,7 @@
             </label>
             <button class="btn primary" type="submit">Save settings</button>
           </form>
-          <div class="callout">
+          <div class="callout" id="settings-note">
             Local models work too: install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>,
             pull a model, then set provider <code>ollama</code> &mdash; no key needed.
           </div>

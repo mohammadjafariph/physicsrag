@@ -217,8 +217,11 @@ async function loadPapers() {
   try {
     const papers = await api("/api/papers");
     window.__papers = papers;
-    $("#papers-subtitle").textContent =
-      `${papers.length} papers downloaded and indexed by the pipeline.`;
+    const subtitle = $("#papers-subtitle");
+    if (subtitle) {
+      subtitle.textContent =
+        `${papers.length} papers downloaded and indexed by the pipeline.`;
+    }
     renderPaperList();
   } catch (e) {
     $("#paper-list").innerHTML = `<div class="error-box">${esc(e.message)}</div>`;
@@ -309,7 +312,8 @@ async function loadSettings() {
     $("#set-base-url").value = s.base_url || "";
     $("#set-key-state").textContent = s.api_key_set ? "(a key is saved)" : "(no key saved)";
   } catch (e) {
-    $("#settings-note").textContent = `failed to load settings: ${e.message}`;
+    const note = $("#settings-note");
+    if (note) note.textContent = `failed to load settings: ${e.message}`;
   }
 }
 
