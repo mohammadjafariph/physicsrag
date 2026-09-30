@@ -36,6 +36,12 @@ REQUEST_TIMEOUT_SECONDS = 30
 # the tool. (Not sufficient on its own — the TLS fingerprint above is.)
 REQUEST_HEADERS = {"User-Agent": "PhysicsRAG/0.1 (autonomous literature research)"}
 
+# Transient failures (HTTP 429 rate limit, stalled connections) are normal
+# when a research cycle talks to arXiv this often. Retry each query with
+# growing pauses; a 429 needs a REAL pause — 1-2s just re-triggers it.
+SEARCH_MAX_ATTEMPTS = 4
+SEARCH_RETRY_DELAYS = (5.0, 15.0, 30.0)
+
 # Atom XML namespace: every tag in the response lives inside this namespace.
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 
@@ -114,15 +120,35 @@ def parse_entry(entry: ET.Element) -> Paper | None:
     )
 
 
-def search_arxiv(query: str, max_results: int = 10) -> list[Paper]:
-    """Run one query against the arXiv API and return Papers."""
+def search_arxiv(
+    query: str,
+    max_results: int = 10,
+    retry_delays: tuple = SEARCH_RETRY_DELAYS,
+) -> list[Paper]:
+    """Run one query against the arXiv API and return Papers.
+
+    Transient failures are retried with growing pauses (429 rate limits
+    and stalled connections recover on their own); the last attempt
+    re-raises so the caller's skip-and-continue logic still applies.
+    """
     url = build_search_url(query, max_results=max_results)
-    response = requests.get(
-        url,
-        headers=REQUEST_HEADERS,
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()  # non-200 -> exception with the status code
+    for attempt, delay in enumerate((0.0,) + tuple(retry_delays)):
+        if delay:
+            print(f"  [retry] arXiv API — waiting {delay:.0f}s "
+                  f"(attempt {attempt + 1}/{1 + len(retry_delays)})")
+            time.sleep(delay)
+        try:
+            response = requests.get(
+                url,
+                headers=REQUEST_HEADERS,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()  # non-200 -> exception w/ status
+            break
+        except NETWORK_ERRORS as error:
+            if attempt == len(retry_delays):
+                raise
+            print(f"  [retry] arXiv API: {error}")
 
     root = ET.fromstring(response.content)
     papers = [
