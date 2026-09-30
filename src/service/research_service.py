@@ -21,6 +21,32 @@ from src.topic.planner import Topic
 RUN_ACTIVE_STATES = ("queued", "running")
 
 
+def resolve_root_topic(memory, topic_name: str) -> tuple[Topic, bool]:
+    """Root for a run on `topic_name`: reuse the stored topic if it exists
+    (expanding an existing graph node), else a brand-new root.
+
+    Returns (topic, expanded). Reusing keeps the node's original parent
+    and cycle, so the tree grows FROM the clicked node instead of
+    duplicating it (add_topic ignores exact-name duplicates anyway).
+    """
+    for topic in memory.all_topics():
+        if topic.name == topic_name:
+            return topic, True
+    return Topic(name=topic_name, parent=None, cycle=0), False
+
+
+def next_base_cycle(memory) -> int:
+    """First cycle index this run may use.
+
+    cycles.cycle is the table's primary key and add_cycle() REPLACEs, so
+    continuing at 0 would silently overwrite earlier runs' history.
+    Numbering continues after the highest stored cycle instead.
+    """
+    row = memory.conn.execute("SELECT MAX(cycle) AS max_cycle FROM cycles").fetchone()
+    highest = row["max_cycle"] if row is not None else None
+    return (highest if highest is not None else -1) + 1
+
+
 class _RunLog(io.TextIOBase):
     """Tee stdout writes into a per-run ring buffer (and the real stdout)."""
 
@@ -51,6 +77,7 @@ class ResearchRun:
         self.tree = ""
         self.started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         self.finished_at: str | None = None
+        self.expanded = False          # run continues an existing topic node
 
 
 class RunManager:
@@ -92,15 +119,23 @@ class RunManager:
             sys.stdout = _RunLog(original_stdout, run.log)
             controller = ResearchController()
 
-            root = Topic(name=run.topic, parent=None, cycle=0)
-            controller.memory.add_topic(
-                root, controller.embedder.embed_texts([root.name])[0]
-            )
+            root, expanded = resolve_root_topic(controller.memory, run.topic)
+            run.expanded = expanded
+            if expanded:
+                run.log.append(
+                    f"[run] expanding existing topic {root.name!r} "
+                    f"(branch from cycle {root.cycle})\n"
+                )
+            else:
+                controller.memory.add_topic(
+                    root, controller.embedder.embed_texts([root.name])[0]
+                )
+            base_cycle = next_base_cycle(controller.memory)
 
             topic = root
-            for cycle_index in range(run.max_cycles):
-                next_topic = controller.run_cycle(topic, cycle_index)
-                run.cycles_done = cycle_index + 1
+            for offset in range(run.max_cycles):
+                next_topic = controller.run_cycle(topic, base_cycle + offset)
+                run.cycles_done = offset + 1
                 if next_topic is None:
                     run.log.append("\n[loop] stopping: no novel topic to explore\n")
                     break
@@ -141,6 +176,7 @@ class RunManager:
             "run_id": run.run_id,
             "topic": run.topic,
             "max_cycles": run.max_cycles,
+            "expanded": run.expanded,
             "status": run.status,
             "cycles_done": run.cycles_done,
             "error": run.error,

@@ -443,3 +443,31 @@ input:focus, select:focus, textarea:focus { border-color: #2dd4bf66; }
 .ascii-tree { margin-top: 10px; }
 .ascii-tree summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
 .ascii-tree summary:hover { color: var(--accent); }
+
+
+/* ---------- expand-topic modal ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(4, 6, 10, .66);
+  display: grid; place-items: center;
+}
+.modal {
+  width: min(420px, 92vw);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .5);
+}
+.modal h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .9px; color: var(--muted); }
+.modal-topic {
+  margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.modal-cycles-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 12px; }
+.modal-error {
+  margin-top: 10px; color: var(--red); font-size: 12.5px;
+  background: #f8717115; border: 1px solid #f8717144;
+  border-radius: 8px; padding: 8px 11px;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

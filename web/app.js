@@ -366,13 +366,22 @@ function ptreeNodeEl(key, item) {
       (papers.length ? `<span class="chip">${papers.length} ${papers.length === 1 ? "paper" : "papers"}</span>` : "") +
       (kids.length ? `<span class="ptree-subcount">${kids.length} sub${kids.length === 1 ? "" : "s"}</span>` : "") +
       `</div>`;
+    // Body click opens the expand-topic dialog (both leaf and branch
+    // nodes); the toggle arrow alone folds the branch.
+    el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      openExpandModal(topic.name);
+    });
     if (hasBody) {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        if (ptreeState.collapsed.has(topic.name)) ptreeState.collapsed.delete(topic.name);
-        else ptreeState.collapsed.add(topic.name);
-        renderTopicTree(window.__treeNodes || []);
-      });
+      const toggle = el.querySelector(".ptree-toggle");
+      if (toggle) {
+        toggle.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          if (ptreeState.collapsed.has(topic.name)) ptreeState.collapsed.delete(topic.name);
+          else ptreeState.collapsed.add(topic.name);
+          renderTopicTree(window.__treeNodes || []);
+        });
+      }
     }
   }
   ptreeDom.nodes.set(key, el);
@@ -605,29 +614,36 @@ function init() {
   $("#tree-zoom-out").addEventListener("click", () => setZoom(ptreeDom.scale - 0.15));
   $("#tree-zoom-reset").addEventListener("click", () => setZoom(1));
 
-  $("#run-form").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const topic = $("#run-topic").value.trim();
-    if (topic.length < 3) return;
+  async function startRun(topic, maxCycles) {
     const btn = $("#run-btn");
     btn.disabled = true;
     $("#run-status").classList.remove("hidden");
     $("#run-log").textContent = "";
+    $("#run-meta").classList.remove("error");
     $("#run-meta").textContent = "starting…";
     $("#run-fill").style.width = "0%";
-    $("#run-progress-label").textContent = "cycle 0 of " + $("#run-cycles").value;
+    $("#run-progress-label").textContent = `cycle 0 of ${maxCycles}`;
     try {
       const run = await api("/api/research/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, max_cycles: Number($("#run-cycles").value) }),
+        body: JSON.stringify({ topic, max_cycles: Number(maxCycles) }),
       });
       $("#run-title").textContent = run.topic;
       pollRun(run.run_id);
     } catch (e) {
       $("#run-meta").textContent = e.message;
+      $("#run-meta").classList.add("error");
       btn.disabled = false;
     }
+  }
+
+  $("#run-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const topic = $("#run-topic").value.trim();
+    if (topic.length < 3) return;
+    $("#run-topic").value = "";
+    startRun(topic, $("#run-cycles").value);
   });
 
   $("#settings-form").addEventListener("submit", async (ev) => {
@@ -652,6 +668,27 @@ function init() {
     } catch (e) {
       $("#set-key-state").textContent = `save failed: ${e.message}`;
     }
+  });
+
+  // Expand-topic modal (from the topic graph).
+  const modal = $("#expand-modal");
+  const openExpandModalFn = (name) => {
+    $("#expand-topic-name").textContent = name;
+    $("#expand-error").classList.add("hidden");
+    modal.classList.remove("hidden");
+    $("#expand-cycles").focus();
+  };
+  window.openExpandModal = openExpandModalFn;
+  $("#expand-cancel").addEventListener("click", () => modal.classList.add("hidden"));
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) modal.classList.add("hidden");
+  });
+  $("#expand-start").addEventListener("click", async () => {
+    const name = $("#expand-topic-name").textContent;
+    const cycles = $("#expand-cycles").value;
+    modal.classList.add("hidden");
+    showView("research");
+    await startRun(name, cycles);
   });
 
   loadHealth();
