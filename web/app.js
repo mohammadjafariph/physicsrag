@@ -112,7 +112,7 @@ function showView(name) {
   document.querySelectorAll(".view").forEach((v) =>
     v.classList.toggle("active", v.id === `view-${name}`));
   if (name === "papers") loadPapers();
-  if (name === "research") loadTree();
+  if (name === "graph") loadTree();
 }
 
 /* ---------- chat ---------- */
@@ -505,8 +505,15 @@ async function pollRun(runId) {
     $("#run-dot").className = `run-dot ${run.status === "running" || run.status === "queued" ? "running" : run.status}`;
     $("#run-title").textContent = run.topic;
     $("#run-meta").textContent =
-      `status: ${run.status} · cycle ${run.cycles_done}/${run.max_cycles}` +
-      (run.error ? ` · ${run.error}` : "");
+      `status: ${run.status}` + (run.error ? ` · ${run.error}` : "");
+    const pct = Math.max(0, Math.min(100,
+      Math.round((run.cycles_done / Math.max(1, run.max_cycles)) * 100)));
+    $("#run-fill").style.width = pct + "%";
+    $("#run-fill").className = `run-progress-fill ${run.status}`;
+    $("#run-progress-label").textContent =
+      run.status === "completed" || run.status === "failed"
+        ? `${run.cycles_done} of ${run.max_cycles} cycles ${run.status}`
+        : `cycle ${Math.min(run.cycles_done + 1, run.max_cycles)} of ${run.max_cycles} in progress`;
     const logEl = $("#run-log");
     const stick = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30;
     logEl.textContent = run.log || "";
@@ -606,6 +613,8 @@ function init() {
     $("#run-status").classList.remove("hidden");
     $("#run-log").textContent = "";
     $("#run-meta").textContent = "starting…";
+    $("#run-fill").style.width = "0%";
+    $("#run-progress-label").textContent = "cycle 0 of " + $("#run-cycles").value;
     try {
       const run = await api("/api/research/runs", {
         method: "POST",

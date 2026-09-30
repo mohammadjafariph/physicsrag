@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PhysicsRAG — self-hosted paper intelligence</title>
-  <link rel="stylesheet" href="/styles.css?v=3" />
+  <link rel="stylesheet" href="/styles.css?v=4" />
   <link rel="stylesheet" href="/vendor/katex/dist/katex.min.css" />
 </head>
 <body>
@@ -22,6 +22,7 @@
         <button class="nav-btn active" data-view="ask"><span class="nav-ico">&#9672;</span> Ask the library</button>
         <button class="nav-btn" data-view="papers"><span class="nav-ico">&#8801;</span> Papers</button>
         <button class="nav-btn" data-view="research"><span class="nav-ico">&#10227;</span> Research runs</button>
+        <button class="nav-btn" data-view="graph"><span class="nav-ico">&#8942;</span> Topic graph</button>
         <button class="nav-btn" data-view="settings"><span class="nav-ico">&#9881;</span> Settings</button>
       </nav>
 
@@ -70,11 +71,11 @@
       <section class="view" id="view-research">
         <header class="view-head">
           <h2>Research runs</h2>
-          <p>Autonomous cycles: plan &rarr; search arXiv &rarr; download &rarr; embed &rarr; analyze &rarr; pick the next topic.</p>
+          <p>Autonomous cycles: plan &rarr; search arXiv &rarr; download &rarr; embed &rarr; analyze &rarr; pick the next topic. The resulting graph lives under <code>Topic graph</code>.</p>
         </header>
-        <div class="research-grid">
-          <div class="panel">
-            <h3>New run</h3>
+        <div class="panel narrow">
+          <div>
+            <h3 class="panel-title">New run</h3>
             <form id="run-form" class="stack">
               <label>Root topic
                 <input id="run-topic" type="text" minlength="3" required
@@ -93,30 +94,42 @@
             <div class="run-status hidden" id="run-status">
               <div class="run-line"><span class="run-dot" id="run-dot"></span><b id="run-title"></b></div>
               <div class="run-meta" id="run-meta"></div>
+              <div class="run-progress">
+                <div class="run-progress-track"><div class="run-progress-fill" id="run-fill"></div></div>
+                <span class="run-progress-label mono" id="run-progress-label"></span>
+              </div>
               <pre class="log" id="run-log"></pre>
             </div>
           </div>
-          <div class="panel">
-            <div class="panel-row">
-              <h3>Topics &amp; papers</h3>
-              <div class="ptree-toolbar">
-                <button class="btn ghost small" id="tree-zoom-out" type="button" title="Zoom out">&minus;</button>
-                <button class="btn ghost small" id="tree-zoom-reset" type="button" title="Reset zoom">100%</button>
-                <button class="btn ghost small" id="tree-zoom-in" type="button" title="Zoom in">+</button>
-                <button class="btn ghost small" id="tree-toggle-all" type="button">Collapse all</button>
-              </div>
+        </div>
+      </section>
+
+      <!-- ============ TOPIC GRAPH ============ -->
+      <section class="view" id="view-graph">
+        <header class="view-head">
+          <h2>Topic graph</h2>
+          <p>How the research loop explores: topics branch into subtopics, papers hang under the topic whose cycle fetched them. Click a topic to fold its branch.</p>
+        </header>
+        <div class="panel">
+          <div class="panel-row">
+            <h3 class="panel-title">Topics &amp; papers</h3>
+            <div class="ptree-toolbar">
+              <button class="btn ghost small" id="tree-zoom-out" type="button" title="Zoom out">&minus;</button>
+              <button class="btn ghost small" id="tree-zoom-reset" type="button" title="Reset zoom">100%</button>
+              <button class="btn ghost small" id="tree-zoom-in" type="button" title="Zoom in">+</button>
+              <button class="btn ghost small" id="tree-toggle-all" type="button">Collapse all</button>
             </div>
-            <div class="ptree-viewport" id="tree-viewport">
-              <div class="ptree-plane" id="tree-plane">
-                <svg class="ptree-edges" id="tree-edges" xmlns="http://www.w3.org/2000/svg"></svg>
-                <div class="ptree-canvas" id="topic-ptree"></div>
-              </div>
-            </div>
-            <details class="ascii-tree">
-              <summary>raw tree</summary>
-              <pre class="tree" id="topic-tree">loading&hellip;</pre>
-            </details>
           </div>
+          <div class="ptree-viewport" id="tree-viewport">
+            <div class="ptree-plane" id="tree-plane">
+              <svg class="ptree-edges" id="tree-edges" xmlns="http://www.w3.org/2000/svg"></svg>
+              <div class="ptree-canvas" id="topic-ptree"></div>
+            </div>
+          </div>
+          <details class="ascii-tree">
+            <summary>raw tree</summary>
+            <pre class="tree" id="topic-tree">loading&hellip;</pre>
+          </details>
         </div>
       </section>
 
@@ -152,6 +165,6 @@
     </main>
   </div>
   <script defer src="/vendor/katex/dist/katex.min.js"></script>
-  <script defer src="/app.js?v=3"></script>
+  <script defer src="/app.js?v=4"></script>
 </body>
 </html>
