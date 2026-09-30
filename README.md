@@ -175,6 +175,7 @@ src/
   topic/             planner, deduplicator
   search/            arXiv search, paper ranking
   documents/         downloader, PDF loader, section-aware chunker
+  documents/latex.py arXiv LaTeX source fetch: real equations per chunk (Stage 5b)
   embeddings/        local embedder
   database/          Chroma vector store
   retrieval/         hybrid retriever (BM25 + vectors + RRF + rerank)

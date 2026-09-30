@@ -127,6 +127,10 @@ class Settings(BaseSettings):
         return self.data_dir / "metadata"
 
     @property
+    def latex_dir(self) -> Path:
+        return self.data_dir / "latex"
+
+    @property
     def vector_store_dir(self) -> Path:
         return self.data_dir / "vector_store"
 
@@ -138,5 +142,6 @@ settings = Settings()
 DATA_DIR = settings.data_dir
 PAPERS_DIR = settings.papers_dir
 METADATA_DIR = settings.metadata_dir
-for _dir in (PAPERS_DIR, METADATA_DIR):
+LATEX_DIR = settings.latex_dir
+for _dir in (PAPERS_DIR, METADATA_DIR, LATEX_DIR):
     _dir.mkdir(parents=True, exist_ok=True)

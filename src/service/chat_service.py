@@ -29,6 +29,7 @@ Rules:
 - Cite every claim with the excerpt number in square brackets, e.g. [2] or [1][3], placed directly after the claim it supports.
 - If the evidence is insufficient for the question, say so plainly and state what is missing.
 - Use LaTeX-style notation ($...$) for math.
+- Equations listed under 'Equations (verbatim LaTeX)' are taken directly from the papers; quote them exactly instead of re-deriving them.
 - Be concise and precise; prefer equations and concrete results over vague prose.
 """
 
@@ -45,8 +46,11 @@ def build_evidence_block(evidence: list[Evidence]) -> str:
             f"[{number}] chunk_id={item.chunk_id} | paper={item.paper_id} | "
             f"{item.title} | section: {item.section} | page {item.page}"
         )
-        parts.append(f"{label}\n{item.text}")
-    return "\n\n---\n\n".join(parts)
+        block = f"{label}\n{item.text}"
+        if item.equations:
+            block += f"\nEquations (verbatim LaTeX):\n{item.equations}"
+        parts.append(block)
+        return "\n\n---\n\n".join(parts)
 
 
 def source_dict(item: Evidence, number: int) -> dict:

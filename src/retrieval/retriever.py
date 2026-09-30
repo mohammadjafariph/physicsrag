@@ -48,6 +48,7 @@ class Evidence:
     page: int
     text: str
     topic: str = ""
+    equations: str = ""         # verbatim LaTeX from the .tex source (Stage 5b)
     vector_score: float = 0.0
     keyword_score: float = 0.0
     fused_score: float = 0.0
@@ -153,6 +154,7 @@ class Retriever:
                 chunk_id=hit["chunk_id"], paper_id=hit["paper_id"],
                 title=hit["title"], section=hit["section"], page=hit["page"],
                 text=hit["text"], topic=hit.get("topic", ""),
+                equations=hit.get("equations", ""),
                 vector_score=hit["score"],
             )
             fused[evidence.chunk_id] = evidence

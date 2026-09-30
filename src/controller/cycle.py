@@ -19,8 +19,9 @@ from dataclasses import asdict, dataclass, field
 
 from src.analysis.analyzer import Analysis, ResearchAnalyzer
 from src.database.vector_db import VectorStore
-from src.documents.chunker import chunk_document
+from src.documents.chunker import chunk_document, attach_equations
 from src.documents.downloader import download_papers
+from src.documents.latex import equations_for_paper
 from src.documents.loader import load_paper
 from src.embeddings.embedder import Embedder
 from src.memory.memory import ResearchMemory
@@ -117,7 +118,16 @@ class ResearchController:
             if paper.paper_id in known_ids:
                 continue
             document = load_paper(paper.paper_id)
-            new_chunks.extend(chunk_document(document))
+            chunks = chunk_document(document)
+            # Stage 5b: real LaTeX from the arXiv e-print source, attached
+            # by the equations' surrounding prose. Best-effort: no source
+            # or no match means PDF-only chunking carries on.
+            equations = equations_for_paper(paper.paper_id)
+            attached = attach_equations(chunks, equations)
+            if equations:
+                print(f"[latex] {paper.paper_id}: attached "
+                      f"{attached}/{len(equations)} equations")
+            new_chunks.extend(chunks)
         if new_chunks:
             embeddings = self.embedder.embed_chunks(new_chunks)
             self.store.add_chunks(new_chunks, embeddings, topic=topic.name)

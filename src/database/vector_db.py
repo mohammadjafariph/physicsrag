@@ -50,6 +50,8 @@ class VectorStore:
             "page": chunk.page,
             "index": chunk.index,
             "topic": topic,
+            # Chroma metadata must be scalars: joined LaTeX equations (Stage 5b).
+            "equations": "\n\n".join(chunk.equations),
         }
 
     def add_chunks(

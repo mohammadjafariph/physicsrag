@@ -13,6 +13,7 @@ headings typographically instead of guessing from text patterns alone.
 
 from dataclasses import dataclass, field
 import json
+import re
 from pathlib import Path
 
 import pymupdf
@@ -20,6 +21,16 @@ import pymupdf
 from config import METADATA_DIR, PAPERS_DIR
 
 BOLD_FLAG = 16  # PyMuPDF span flags bit 4 (2**4) == bold
+
+# Glyph-debris filter: equation glyphs extract as isolated symbols with no
+# real word on the line. Prose and named functions (sin, exp, det, ...) keep
+# runs of >= 3 letters; debris like 'ρ∂ψ√' and bare page numbers do not.
+_WORD_RUN_RE = re.compile(r"[A-Za-z]{3,}")
+
+
+def is_glyph_debris(text: str) -> bool:
+    """True for lines with no run of 3+ letters (symbol soup, page numbers)."""
+    return _WORD_RUN_RE.search(text) is None
 
 
 @dataclass
@@ -64,6 +75,8 @@ def extract_page_lines(page: "pymupdf.Page") -> list[Line]:
                 continue
             text = " ".join(span["text"] for span in spans).strip()
             if not text:
+                continue
+            if is_glyph_debris(text):
                 continue
             size = max(span["size"] for span in spans)
             bold = any(span["flags"] & BOLD_FLAG for span in spans)

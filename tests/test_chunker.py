@@ -1,6 +1,12 @@
 """Chunker heading-detection tests on synthetic documents."""
 
-from src.documents.chunker import chunk_document, is_section_heading
+from src.documents.chunker import (
+    chunk_document,
+    is_section_heading,
+    looks_like_display_math,
+    attach_equations,
+)
+from src.documents.latex import Equation
 from src.documents.loader import Line, LoadedDocument
 
 
@@ -61,3 +67,69 @@ def test_small_bold_line_is_heading():
 def test_caption_is_never_a_heading():
     caption = line("Figure 1: entropy vs time", size=12.0)
     assert not is_section_heading(caption, 10.0, page_number=2)
+
+
+# ---- Stage 5b: equations ----------------------------------------------------
+
+def test_display_math_detected():
+    assert looks_like_display_math("E(ρ,ψ) = -(ℏ2/2m)∇2ψ + V(ρ,ψ)ψ")
+    assert looks_like_display_math("S = -Tr ρ log ρ")
+    assert looks_like_display_math("⟨ψ|O|ψ⟩ ∝ ∑ λ_i")
+
+
+def test_prose_is_not_display_math():
+    assert not looks_like_display_math(
+        "The entropy of the reduced density matrix is given by the trace"
+    )
+    assert not looks_like_display_math(
+        "We can see that the result follows from the previous section."
+    )
+
+
+def test_equation_line_glued_to_previous_chunk():
+    # A target-size flush cuts the chunk right before a display equation;
+    # the equation must be glued back onto the previous chunk's text.
+    first = line("word " * 260)          # ~1300 chars -> triggers a flush
+    equation = line("E(ρ,ψ) = -(ℏ2/2m)∇2ψ + V(ρ,ψ)ψ")
+    after = line("word " * 40)
+    doc = make_doc([[first, equation, after]])
+    chunks = chunk_document(doc)
+    assert chunks
+    assert equation.text in chunks[0].text
+
+
+def test_equation_after_heading_starts_new_chunk():
+    # No glue across a section heading: the equation belongs to the new
+    # section's first chunk.
+    doc = make_doc([
+        [line("word " * 260)],
+        [line("Methods", size=12.0), line("H = p^2/2m"), line("word " * 40)],
+    ])
+    chunks = chunk_document(doc)
+    methods = next(c for c in chunks if c.section == "Methods")
+    assert "H = p^2/2m" in methods.text.split("\n")[0]
+
+
+def test_attach_equations_matches_by_context():
+    chunks = chunk_document(make_doc([
+        [line("I. Entanglement"), line("The entanglement entropy of a pure state and its scaling behavior " * 3)],
+        [line("II. Dynamics"), line("The time evolution of the wavefunction under the Hamiltonian operator " * 3)],
+    ]))
+    equations = [
+        Equation(latex="S = -Tr rho log rho",
+                 context="The entanglement entropy of a pure state is defined as"),
+        Equation(latex="d psi/dt = -i H psi",
+                 context="Time evolution of the wavefunction under the Hamiltonian"),
+    ]
+    attached = attach_equations(chunks, equations)
+    assert attached == 2
+    assert chunks[0].equations == ["S = -Tr rho log rho"]
+    assert chunks[1].equations == ["d psi/dt = -i H psi"]
+    assert "S = -Tr rho log rho" in chunks[0].text
+
+
+def test_attach_equations_drops_unmatchable():
+    chunks = chunk_document(make_doc([[line("word " * 60)]]))
+    equations = [Equation(latex="x = 1", context="completely unrelated quantum gravity holography")]
+    assert attach_equations(chunks, equations) == 0
+    assert chunks[0].equations == []

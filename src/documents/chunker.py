@@ -18,8 +18,9 @@ or bold); regexes still apply there.
 
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from src.documents.latex import Equation
 from src.documents.loader import Line, LoadedDocument
 
 TARGET_CHUNK_CHARS = 1200
@@ -37,6 +38,18 @@ _ENDS_MID_SENTENCE = re.compile(
 )
 
 _MATH_CHARS = set("=()[]{}|∇∂ρψ√×·≤≥→~")
+
+# Display-equation heuristics: PDF text-layer equations are symbol soup.
+_MATH_SYMBOLS = set("=()[]{}|∇∂ρψφθσω√×·≤≥→~±≡∝∑∫⟨⟩^_≈∈⊂")
+_STOPWORDS = {
+    "the", "of", "and", "in", "is", "are", "that", "which", "with", "for",
+    "by", "on", "as", "at", "to", "a", "an", "from", "be", "can", "we",
+}
+
+# Equations attach to chunks by lexical overlap between the equation's
+# context paragraph and the chunk text (Stage 5b).
+ATTACH_JACCARD_MIN = 0.15
+_WORD_RE = re.compile(r"[a-zA-Z]{3,}")
 
 # Fallback patterns for headings set in the body font:
 _HEADING_PATTERNS = [
@@ -87,6 +100,37 @@ def is_section_heading(line: Line, body_size: float, page_number: int) -> bool:
     return False
 
 
+def looks_like_display_math(text: str) -> bool:
+    """Heuristic for PDF text-layer display equations.
+
+    Short, dominated by math glyphs, and nearly free of English function
+    words. Catches both mangled glyph soup and plain lines like
+    'E(ρ,ψ) = -(ℏ2/2m)∇2ψ'; rejects prose (too many stopwords) and
+    headings (too long).
+    """
+    words = text.split()
+    if not 1 <= len(words) <= 15:
+        return False
+    n_stop = sum(
+        1 for word in words if word.lower().strip(",.()[]") in _STOPWORDS
+    )
+    if n_stop > 2:
+        return False
+    n_math = sum(1 for char in text if char in _MATH_SYMBOLS)
+    n_alpha = sum(1 for char in text if char.isalpha())
+    return n_math >= 2 or (n_math >= 1 and n_alpha <= len(text) / 2)
+
+
+def _word_set(text: str) -> set[str]:
+    return set(_WORD_RE.findall(text.lower()))
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
 def clean_line(line: str) -> str:
     """Collapse internal whitespace, drop ligature debris."""
     return " ".join(line.split())
@@ -103,6 +147,7 @@ class Chunk:
     text: str
     page: int            # approximate 1-based page where the chunk starts
     index: int           # chunk order within the paper
+    equations: list[str] = field(default_factory=list)  # LaTeX (Stage 5b)
 
 
 def _flush(
@@ -135,6 +180,7 @@ def chunk_document(doc: LoadedDocument) -> list[Chunk]:
     section = "Preamble"
     buffer: list[str] = []
     chunk_start_page = 1
+    flushed_full = False  # last flush was the target-size cut, not a heading
 
     for page_number, page in enumerate(doc.pages, start=1):
         for line in page:
@@ -155,6 +201,16 @@ def chunk_document(doc: LoadedDocument) -> list[Chunk]:
                 buffer = []
                 section = clean_line(line.text)
                 chunk_start_page = page_number
+                flushed_full = False
+                continue
+            # Keep display equations with the prose that introduces them:
+            # if the target-size flush just cut the chunk off, glue a
+            # following math line back onto the previous chunk instead of
+            # orphaning it at the head of the next one.
+            if (flushed_full and not buffer and chunks
+                    and looks_like_display_math(line.text)):
+                chunks[-1].text += "\n" + clean_line(line.text)
+                flushed_full = False
                 continue
             if not buffer:
                 chunk_start_page = page_number
@@ -166,6 +222,7 @@ def chunk_document(doc: LoadedDocument) -> list[Chunk]:
                 if chunk:
                     chunks.append(chunk)
                 buffer = []
+                flushed_full = True
 
     chunk = _flush(buffer, doc.paper_id, doc.title, section,
                    chunk_start_page, len(chunks))
@@ -173,6 +230,32 @@ def chunk_document(doc: LoadedDocument) -> list[Chunk]:
         chunks.append(chunk)
 
     return chunks
+
+
+def attach_equations(chunks: list[Chunk], equations: list[Equation]) -> int:
+    """Attach LaTeX equations (Stage 5b) to the chunks discussing them.
+
+    Matching is lexical: the equation's context paragraph (the prose right
+    before it in the .tex source) is compared with each chunk by Jaccard
+    word overlap. Callers pass chunks of ONE paper. Unmatched equations
+    are dropped rather than guessed. Returns the number attached.
+    """
+    if not equations or not chunks:
+        return 0
+    chunk_words = {chunk.chunk_id: _word_set(chunk.text) for chunk in chunks}
+    attached = 0
+    for equation in equations:
+        eq_words = _word_set(equation.context)
+        if len(eq_words) < 4:
+            continue
+        best = max(chunks, key=lambda c: _jaccard(eq_words, chunk_words[c.chunk_id]))
+        if _jaccard(eq_words, chunk_words[best.chunk_id]) < ATTACH_JACCARD_MIN:
+            continue
+        if equation.latex not in best.equations:
+            best.equations.append(equation.latex)
+            best.text += f"\n{equation.latex}"
+        attached += 1
+    return attached
 
 
 def chunk_all_documents(docs: list[LoadedDocument]) -> list[Chunk]:
