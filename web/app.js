@@ -261,74 +261,230 @@ function renderPaperList() {
 
 /* ---------- research runs ---------- */
 
-/* Experimental: interactive topic -> papers tree. Each topic node is
-   collapsible; papers hang off the topic whose cycle fetched them and
-   link straight to arXiv. The raw ASCII tree stays in a <details>. */
+/* Experimental: graphical topic -> papers tree. A horizontal tidy-tree
+   (root left, growth right): topic cards and paper leaves positioned by a
+   leaf-allocation layout, connected by SVG bezier edges. Positions animate
+   via rAF so expand/collapse glides and edges follow the nodes. */
 
 const ptreeState = { collapsed: new Set() };
+const ptreeDom = {
+  nodes: new Map(),   // key -> element (persistent across renders)
+  pos: new Map(),     // key -> {x, y} current animated position
+  edges: new Map(),   // "a->b" -> path element
+  scale: 1,
+};
 
-function ptreePaper(paper) {
-  const failed = paper.status === "failed";
-  const a = document.createElement("a");
-  a.className = "ptree-paper" + (failed ? " failed" : "");
-  a.href = `https://arxiv.org/abs/${encodeURIComponent(paper.paper_id)}`;
-  a.target = "_blank";
-  a.rel = "noopener";
-  const bits = [
-    `<span class="ptree-doc">${failed ? "&#9888;" : "&#128196;"}</span>`,
-    `<span class="ptree-paper-title">${esc(paper.title)}</span>`,
-    `<span class="ptree-paper-id mono">${esc(paper.paper_id)}</span>`,
-  ];
-  if (paper.chunk_count) {
-    bits.push(`<span class="chip neutral">${paper.chunk_count} chunks</span>`);
-  }
-  if (failed) bits.push(`<span class="chip neutral">not downloaded</span>`);
-  a.innerHTML = bits.join("");
-  return a;
+const PTREE = {
+  COL: 270,           // horizontal distance between depth levels
+  NODE_W: 224,        // topic card width
+  PAPER_W: 208,       // paper card width
+  TOPIC_H: 50,        // leaf-row height for a topic
+  PAPER_H: 34,        // leaf-row height for a paper
+  GAP: 10,            // vertical gap between sibling subtrees
+};
+
+function ptreeReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function ptreeNode(node) {
-  const wrap = document.createElement("div");
-  wrap.className = "ptree-node";
+/* ---- layout: returns [{key, node, kind, depth, x, y, parentKey}] ---- */
 
+function ptreeSubHeight(node) {
   const papers = node.papers || [];
   const kids = node.children || [];
-  const hasBody = kids.length > 0 || papers.length > 0;
+  if (!papers.length && !kids.length) return PTREE.TOPIC_H;
+  const collapsed = ptreeState.collapsed.has(node.name);
+  if (collapsed || (!papers.length && !kids.length)) return PTREE.TOPIC_H;
+  let total = 0;
+  for (const paper of papers) total += PTREE.PAPER_H;
+  for (const child of kids) total += ptreeSubHeight(child) + PTREE.GAP;
+  return total - PTREE.GAP;
+}
 
-  const head = document.createElement("div");
-  head.className = "ptree-topic" + (hasBody ? " has-body" : "");
-  head.innerHTML = [
-    `<span class="ptree-toggle">${hasBody ? "&#9656;" : ""}</span>`,
-    `<span class="ptree-name">${esc(node.name)}</span>`,
-    `<span class="chip neutral mono" title="topic created in cycle ${node.cycle}">c${node.cycle}</span>`,
-    papers.length ? `<span class="chip">${papers.length} ${papers.length === 1 ? "paper" : "papers"}</span>` : "",
-    kids.length ? `<span class="ptree-subcount">${kids.length} sub${kids.length === 1 ? "" : "s"}</span>` : "",
-  ].join("");
+function ptreeLayout(nodes) {
+  const out = [];
+  let y = 8;
+  const walk = (node, depth, parentKey) => {
+    const papers = node.papers || [];
+    const kids = node.children || [];
+    const hasBody = (papers.length || kids.length) &&
+      !ptreeState.collapsed.has(node.name);
+    const x = 12 + depth * PTREE.COL + PTREE.NODE_W / 2;
+    if (!hasBody) {
+      out.push({ key: node.name, node, kind: "topic", depth, x, y: y + PTREE.TOPIC_H / 2, parentKey });
+      y += PTREE.TOPIC_H + PTREE.GAP;
+      return;
+    }
+    const startY = y;
+    for (const paper of papers) {
+      out.push({ key: `paper:${paper.paper_id}`, node: paper, kind: "paper", depth: depth + 1,
+                 x: 12 + (depth + 1) * PTREE.COL + PTREE.NODE_W / 2, y: y + PTREE.PAPER_H / 2,
+                 parentKey: node.name });
+      y += PTREE.PAPER_H;
+    }
+    for (const child of kids) walk(child, depth + 1, node.name);
+    const centerY = startY + (y - PTREE.GAP - startY) / 2;
+    out.push({ key: node.name, node, kind: "topic", depth, x, y: centerY, parentKey });
+  };
+  for (const root of nodes) walk(root, 0, "");
+  return out;
+}
 
-  const body = document.createElement("div");
-  body.className = "ptree-body";
-  for (const paper of papers) body.appendChild(ptreePaper(paper));
-  for (const child of kids) body.appendChild(ptreeNode(child));
+/* ---- rendering ---- */
 
-  if (hasBody) {
-    if (ptreeState.collapsed.has(node.name)) wrap.classList.add("collapsed");
-    head.addEventListener("click", () => wrap.classList.toggle("collapsed"));
+function ptreeNodeEl(key, item) {
+  let el = ptreeDom.nodes.get(key);
+  if (el) return el;
+  if (item.kind === "paper") {
+    const paper = item.node;
+    const failed = paper.status === "failed";
+    el = document.createElement("a");
+    el.className = "gnode paper" + (failed ? " failed" : "");
+    el.href = `https://arxiv.org/abs/${encodeURIComponent(paper.paper_id)}`;
+    el.target = "_blank";
+    el.rel = "noopener";
+    el.title = paper.title;
+    el.innerHTML =
+      `<span class="gnode-doc">${failed ? "&#9888;" : "&#128196;"}</span>` +
+      `<span class="gnode-title">${esc(paper.title)}</span>` +
+      `<span class="gnode-id mono">${esc(paper.paper_id)}</span>`;
   } else {
-    head.classList.add("leaf");
+    const topic = item.node;
+    const papers = topic.papers || [];
+    const kids = topic.children || [];
+    const hasBody = (papers.length || kids.length) > 0;
+    el = document.createElement("div");
+    el.className = "gnode topic" + (hasBody ? " has-body" : "");
+    el.title = topic.name;
+    el.innerHTML =
+      `<div class="gnode-row">` +
+      `<span class="ptree-toggle">${hasBody ? "&#9656;" : ""}</span>` +
+      `<span class="gnode-name">${esc(topic.name)}</span>` +
+      `</div>` +
+      `<div class="gnode-meta">` +
+      `<span class="chip neutral mono">c${topic.cycle}</span>` +
+      (papers.length ? `<span class="chip">${papers.length} ${papers.length === 1 ? "paper" : "papers"}</span>` : "") +
+      (kids.length ? `<span class="ptree-subcount">${kids.length} sub${kids.length === 1 ? "" : "s"}</span>` : "") +
+      `</div>`;
+    if (hasBody) {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        if (ptreeState.collapsed.has(topic.name)) ptreeState.collapsed.delete(topic.name);
+        else ptreeState.collapsed.add(topic.name);
+        renderTopicTree(window.__treeNodes || []);
+      });
+    }
   }
-  wrap.appendChild(head);
-  if (hasBody) wrap.appendChild(body);
-  return wrap;
+  ptreeDom.nodes.set(key, el);
+  return el;
+}
+
+function ptreeEdgeD(x1, y1, x2, y2) {
+  const dx = Math.max(30, (x2 - x1) * 0.5);
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+}
+
+function ptreeAnimate(items) {
+  // items: [{key, el, x, y, w, h, parentKey, kind}]  (y = vertical center)
+  const canvas = document.getElementById("topic-ptree");
+  const svg = document.getElementById("tree-edges");
+  const targets = new Map(items.map((it) => [it.key, it]));
+  const duration = ptreeReducedMotion() ? 0 : 360;
+
+  // Fade out nodes that disappeared from the target set.
+  for (const [key, el] of [...ptreeDom.nodes]) {
+    if (!targets.has(key)) {
+      ptreeDom.nodes.delete(key);
+      ptreeDom.pos.delete(key);
+      el.classList.add("gnode-out");
+      setTimeout(() => el.remove(), 280);
+    }
+  }
+  // Drop stale edges.
+  const wantedEdges = new Set(
+    items.filter((it) => it.parentKey).map((it) => `${it.parentKey}->${it.key}`));
+  for (const [key, pathEl] of [...ptreeDom.edges]) {
+    if (!wantedEdges.has(key)) {
+      ptreeDom.edges.delete(key);
+      pathEl.remove();
+    }
+  }
+
+  for (const it of items) {
+    const el = ptreeNodeEl(it.key, it);
+    if (el.parentNode !== canvas) canvas.appendChild(el);
+    const from = ptreeDom.pos.get(it.key) ||
+      { x: it.x, y: it.y, o: 0 };   // new nodes fade in at their target spot
+    ptreeDom.pos.set(it.key, { ...from, kind: it.kind });
+    if (it.kind === "topic" && it.node.children) {
+      el.classList.toggle("open", !ptreeState.collapsed.has(it.node.name));
+    }
+
+    // Edge element (under the nodes).
+    if (it.parentKey) {
+      const ekey = `${it.parentKey}->${it.key}`;
+      let pathEl = ptreeDom.edges.get(ekey);
+      if (!pathEl) {
+        pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        pathEl.setAttribute("class", it.kind === "paper" ? "gedge paper" : "gedge");
+        svg.appendChild(pathEl);
+        ptreeDom.edges.set(ekey, pathEl);
+      }
+    }
+  }
+
+  const t0 = performance.now();
+  const frame = (now) => {
+    const t = duration === 0 ? 1 : Math.min(1, (now - t0) / duration);
+    const ease = 1 - Math.pow(1 - t, 3);   // cubic ease-out
+    let maxY = 0, maxX = 0;
+    for (const it of items) {
+      const from = ptreeDom.pos.get(it.key) || { x: it.x, y: it.y };
+      const cx = from.x + (it.x - from.x) * ease;
+      const cy = from.y + (it.y - from.y) * ease;
+      ptreeDom.pos.set(it.key, { x: cx, y: cy });
+      const el = ptreeDom.nodes.get(it.key);
+      if (!el) continue;
+      const w = it.kind === "paper" ? PTREE.PAPER_W : PTREE.NODE_W;
+      const h = it.kind === "paper" ? PTREE.PAPER_H : PTREE.TOPIC_H;
+      el.style.transform = `translate(${cx - w / 2}px, ${cy - h / 2}px)`;
+      el.style.width = w + "px";
+      el.style.opacity = String(from.o + (1 - from.o) * ease);
+      if (t >= 1) el.style.opacity = "";
+      maxX = Math.max(maxX, cx + w / 2);
+      maxY = Math.max(maxY, cy + h / 2);
+    }
+    for (const [ekey, pathEl] of ptreeDom.edges) {
+      const [pk, ck] = ekey.split("->");
+      const p = ptreeDom.pos.get(pk);
+      const c = ptreeDom.pos.get(ck);
+      if (!p || !c) { pathEl.remove(); ptreeDom.edges.delete(ekey); continue; }
+      const cw = (c.kind === "paper" ? PTREE.PAPER_W : PTREE.NODE_W) / 2;
+      pathEl.setAttribute("d", ptreeEdgeD(p.x + PTREE.NODE_W / 2, p.y, c.x - cw, c.y));
+    }
+    canvas.style.width = (maxX + PTREE.COL / 2) + "px";
+    canvas.style.height = (maxY + 40) + "px";
+    svg.setAttribute("width", canvas.style.width);
+    svg.setAttribute("height", canvas.style.height);
+    if (t < 1) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }
 
 function renderTopicTree(nodes) {
-  const box = $("#topic-ptree");
-  box.innerHTML = "";
   if (!nodes || !nodes.length) {
-    box.innerHTML = `<p class="muted">No topics yet &mdash; start a research run.</p>`;
+    ptreeDom.nodes.forEach((el) => el.remove());
+    ptreeDom.nodes.clear(); ptreeDom.pos.clear();
+    ptreeDom.edges.forEach((el) => el.remove()); ptreeDom.edges.clear();
+    document.getElementById("tree-edges").setAttribute("width", "0");
+    document.getElementById("tree-edges").setAttribute("height", "0");
+    document.getElementById("topic-ptree").innerHTML =
+      `<p class="muted ptree-empty">No topics yet &mdash; start a research run.</p>`;
     return;
   }
-  for (const root of nodes) box.appendChild(ptreeNode(root));
+  const canvas = document.getElementById("topic-ptree");
+  canvas.querySelectorAll(".ptree-empty").forEach((el) => el.remove());
+  ptreeAnimate(ptreeLayout(nodes));
 }
 
 async function loadTree() {
@@ -415,22 +571,31 @@ function init() {
 
   $("#paper-filter").addEventListener("input", renderPaperList);
 
-  // Topics & papers tree: collapse/expand everything at once.
+  // Topics & papers graph: collapse/expand everything at once.
   $("#tree-toggle-all").addEventListener("click", (ev) => {
-    const box = $("#topic-ptree");
-    const anyOpen = !!box.querySelector(".ptree-node:not(.collapsed) > .ptree-body");
+    const topics = [];
+    (function collect(ns) {
+      for (const n of ns) {
+        if ((n.children || []).length || (n.papers || []).length) topics.push(n.name);
+        collect(n.children || []);
+      }
+    })(window.__treeNodes || []);
+    const anyOpen = topics.some((name) => !ptreeState.collapsed.has(name));
     ptreeState.collapsed.clear();
-    if (anyOpen) {
-      box.querySelectorAll(".ptree-node").forEach((n) => {
-        if (n.querySelector(":scope > .ptree-body")) {
-          ptreeState.collapsed.add(
-            n.querySelector(":scope > .ptree-topic .ptree-name").textContent);
-        }
-      });
-    }
+    if (anyOpen) topics.forEach((name) => ptreeState.collapsed.add(name));
     renderTopicTree(window.__treeNodes || []);
     ev.target.textContent = anyOpen ? "Expand all" : "Collapse all";
   });
+
+  // Graph zoom (CSS zoom keeps layout + scroll bounds correct).
+  const setZoom = (z) => {
+    ptreeDom.scale = Math.min(1.5, Math.max(0.5, z));
+    $("#tree-plane").style.zoom = ptreeDom.scale;
+    $("#tree-zoom-reset").textContent = Math.round(ptreeDom.scale * 100) + "%";
+  };
+  $("#tree-zoom-in").addEventListener("click", () => setZoom(ptreeDom.scale + 0.15));
+  $("#tree-zoom-out").addEventListener("click", () => setZoom(ptreeDom.scale - 0.15));
+  $("#tree-zoom-reset").addEventListener("click", () => setZoom(1));
 
   $("#run-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
