@@ -23,6 +23,7 @@ from pathlib import Path
 from curl_cffi import requests
 
 from config import METADATA_DIR, PAPERS_DIR
+from src.net import NETWORK_ERRORS
 from src.search.paper import Paper
 
 ARXIV_PDF_URL = "https://arxiv.org/pdf/{paper_id}"
@@ -106,7 +107,7 @@ def download_paper(
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-    except requests.RequestException as error:
+    except NETWORK_ERRORS as error:
         return DownloadResult(
             paper_id=paper.paper_id,
             status="failed",

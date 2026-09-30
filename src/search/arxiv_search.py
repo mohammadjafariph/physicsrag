@@ -21,6 +21,7 @@ from urllib.parse import quote
 # and is a drop-in replacement for requests here.
 from curl_cffi import requests
 
+from src.net import NETWORK_ERRORS
 from src.search.paper import Paper
 from src.search.rank import STOPWORDS as _STOPWORDS
 
@@ -195,7 +196,7 @@ def search_papers(
             papers, relaxed_query = search_arxiv_relaxed(
                 query, max_results=results_per_query
             )
-        except requests.RequestException as error:
+        except NETWORK_ERRORS as error:
             # One failed query must not kill the whole search batch.
             print(f"  query failed, skipping: {error}")
             continue
