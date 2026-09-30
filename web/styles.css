@@ -344,3 +344,47 @@ input:focus, select:focus, textarea:focus { border-color: #2dd4bf66; }
   .research-grid { grid-template-columns: 1fr; }
   .main { padding: 20px; }
 }
+
+/* ---------- topics & papers tree (experimental) ---------- */
+.panel-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.panel-row h3 { margin: 0 0 0; }
+.btn.ghost.small { padding: 4px 10px; font-size: 12px; border-radius: 8px; color: var(--muted); }
+.btn.ghost.small:hover { color: var(--accent); border-color: #2dd4bf44; }
+
+.ptree { margin-top: 12px; }
+.ptree-node { border-left: 1px solid var(--border-soft); padding-left: 10px; margin-left: 4px; }
+.ptree-node > .ptree-node { margin-top: 2px; }
+.ptree > .ptree-node { border-left-color: transparent; padding-left: 0; margin-left: 0; }
+
+.ptree-topic {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px; border-radius: 8px; cursor: default;
+  user-select: none;
+}
+.ptree-topic.has-body { cursor: pointer; }
+.ptree-topic.has-body:hover { background: var(--surface-2); }
+.ptree-topic.leaf { opacity: .85; }
+.ptree-toggle { width: 14px; flex: 0 0 14px; color: var(--muted); font-size: 11px; transition: transform .12s ease; }
+.ptree-node:not(.collapsed) > .ptree-topic .ptree-toggle { transform: rotate(90deg); }
+.ptree-name { font-size: 13.5px; font-weight: 600; }
+.ptree-subcount { font-size: 11px; color: var(--muted); }
+.ptree-node.collapsed > .ptree-body { display: none; }
+
+.ptree-body { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 6px 22px; }
+.ptree-paper {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; border-radius: 8px;
+  color: var(--text); text-decoration: none;
+  font-size: 13px;
+  transition: background .12s ease;
+}
+.ptree-paper:hover { background: var(--surface-2); }
+.ptree-paper.failed { opacity: .55; }
+.ptree-doc { flex: 0 0 auto; font-size: 12px; }
+.ptree-paper-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ptree-paper-id { flex: 0 0 auto; font-size: 11px; color: var(--muted); }
+.ptree-paper .chip { flex: 0 0 auto; }
+
+.ascii-tree { margin-top: 10px; }
+.ascii-tree summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
+.ascii-tree summary:hover { color: var(--accent); }

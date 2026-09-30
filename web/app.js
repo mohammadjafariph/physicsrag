@@ -261,12 +261,85 @@ function renderPaperList() {
 
 /* ---------- research runs ---------- */
 
+/* Experimental: interactive topic -> papers tree. Each topic node is
+   collapsible; papers hang off the topic whose cycle fetched them and
+   link straight to arXiv. The raw ASCII tree stays in a <details>. */
+
+const ptreeState = { collapsed: new Set() };
+
+function ptreePaper(paper) {
+  const failed = paper.status === "failed";
+  const a = document.createElement("a");
+  a.className = "ptree-paper" + (failed ? " failed" : "");
+  a.href = `https://arxiv.org/abs/${encodeURIComponent(paper.paper_id)}`;
+  a.target = "_blank";
+  a.rel = "noopener";
+  const bits = [
+    `<span class="ptree-doc">${failed ? "&#9888;" : "&#128196;"}</span>`,
+    `<span class="ptree-paper-title">${esc(paper.title)}</span>`,
+    `<span class="ptree-paper-id mono">${esc(paper.paper_id)}</span>`,
+  ];
+  if (paper.chunk_count) {
+    bits.push(`<span class="chip neutral">${paper.chunk_count} chunks</span>`);
+  }
+  if (failed) bits.push(`<span class="chip neutral">not downloaded</span>`);
+  a.innerHTML = bits.join("");
+  return a;
+}
+
+function ptreeNode(node) {
+  const wrap = document.createElement("div");
+  wrap.className = "ptree-node";
+
+  const papers = node.papers || [];
+  const kids = node.children || [];
+  const hasBody = kids.length > 0 || papers.length > 0;
+
+  const head = document.createElement("div");
+  head.className = "ptree-topic" + (hasBody ? " has-body" : "");
+  head.innerHTML = [
+    `<span class="ptree-toggle">${hasBody ? "&#9656;" : ""}</span>`,
+    `<span class="ptree-name">${esc(node.name)}</span>`,
+    `<span class="chip neutral mono" title="topic created in cycle ${node.cycle}">c${node.cycle}</span>`,
+    papers.length ? `<span class="chip">${papers.length} ${papers.length === 1 ? "paper" : "papers"}</span>` : "",
+    kids.length ? `<span class="ptree-subcount">${kids.length} sub${kids.length === 1 ? "" : "s"}</span>` : "",
+  ].join("");
+
+  const body = document.createElement("div");
+  body.className = "ptree-body";
+  for (const paper of papers) body.appendChild(ptreePaper(paper));
+  for (const child of kids) body.appendChild(ptreeNode(child));
+
+  if (hasBody) {
+    if (ptreeState.collapsed.has(node.name)) wrap.classList.add("collapsed");
+    head.addEventListener("click", () => wrap.classList.toggle("collapsed"));
+  } else {
+    head.classList.add("leaf");
+  }
+  wrap.appendChild(head);
+  if (hasBody) wrap.appendChild(body);
+  return wrap;
+}
+
+function renderTopicTree(nodes) {
+  const box = $("#topic-ptree");
+  box.innerHTML = "";
+  if (!nodes || !nodes.length) {
+    box.innerHTML = `<p class="muted">No topics yet &mdash; start a research run.</p>`;
+    return;
+  }
+  for (const root of nodes) box.appendChild(ptreeNode(root));
+}
+
 async function loadTree() {
   try {
     const data = await api("/api/topics/tree");
     $("#topic-tree").textContent = data.tree || "(no topics yet)";
+    window.__treeNodes = data.nodes;
+    renderTopicTree(data.nodes);
   } catch (e) {
-    $("#topic-tree").textContent = `error: ${e.message}`;
+    const box = $("#topic-ptree");
+    if (box) box.innerHTML = `<div class="error-box">${esc(e.message)}</div>`;
   }
 }
 
@@ -341,6 +414,23 @@ function init() {
   });
 
   $("#paper-filter").addEventListener("input", renderPaperList);
+
+  // Topics & papers tree: collapse/expand everything at once.
+  $("#tree-toggle-all").addEventListener("click", (ev) => {
+    const box = $("#topic-ptree");
+    const anyOpen = !!box.querySelector(".ptree-node:not(.collapsed) > .ptree-body");
+    ptreeState.collapsed.clear();
+    if (anyOpen) {
+      box.querySelectorAll(".ptree-node").forEach((n) => {
+        if (n.querySelector(":scope > .ptree-body")) {
+          ptreeState.collapsed.add(
+            n.querySelector(":scope > .ptree-topic .ptree-name").textContent);
+        }
+      });
+    }
+    renderTopicTree(window.__treeNodes || []);
+    ev.target.textContent = anyOpen ? "Expand all" : "Collapse all";
+  });
 
   $("#run-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();

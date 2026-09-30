@@ -97,8 +97,15 @@
             </div>
           </div>
           <div class="panel">
-            <h3>Topic tree</h3>
-            <pre class="tree" id="topic-tree">loading&hellip;</pre>
+            <div class="panel-row">
+              <h3>Topics &amp; papers</h3>
+              <button class="btn ghost small" id="tree-toggle-all" type="button">Collapse all</button>
+            </div>
+            <div class="ptree" id="topic-ptree">loading&hellip;</div>
+            <details class="ascii-tree">
+              <summary>raw tree</summary>
+              <pre class="tree" id="topic-tree">loading&hellip;</pre>
+            </details>
           </div>
         </div>
       </section>
