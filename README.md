@@ -202,6 +202,14 @@ python -m pytest    # 38 tests: config, providers, chunker, ranking,
 - [ ] PDF viewer with jump-to-cited-page
 - [ ] Multi-root topic forests with named projects
 
+## ✍️ Authorship
+
+The idea, design, and architecture of this project — the research-loop
+concept, the anti-loop memory, the citation-provenance strategy, and the
+overall product — are my own work. The implementation was written with
+the assistance of LLM-based coding agents, with me directing every design
+decision, reviewing each change, and running the verification.
+
 ## 📄 License
 
 [MIT](LICENSE) — © 2026 Mohmmad Jafari
