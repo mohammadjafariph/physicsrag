@@ -159,6 +159,16 @@ sup.cite {
   cursor: default;
 }
 
+/* ---------- LaTeX (KaTeX) ---------- */
+.msg .msg-body .katex { font-size: 1.05em; }
+.msg .msg-body .katex-display {
+  margin: 10px 0;
+  padding: 4px 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.msg .msg-body .katex-error { color: var(--red); font-family: var(--mono); font-size: 12.5px; }
+
 .caret {
   display: inline-block; width: 8px; height: 15px;
   background: var(--accent);

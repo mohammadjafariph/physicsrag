@@ -4,6 +4,35 @@
 
 const $ = (sel) => document.querySelector(sel);
 
+/* ---------- LaTeX rendering (KaTeX, vendored offline) ---------- */
+
+function katexHtml(tex, displayMode) {
+  try {
+    return katex.renderToString(tex, {
+      displayMode,
+      throwOnError: false,   // render bad TeX in red instead of crashing
+      strict: "ignore",
+    });
+  } catch (e) {
+    return `<code>${esc(tex)}</code>`;
+  }
+}
+
+/* Pull math out BEFORE markdown processing so $...$, \(...\), \[...\],
+   $$...$$ survive escaping; re-inserted as rendered HTML at the end. */
+function extractMath(src) {
+  const math = [];
+  const stash = (tex, displayMode) => {
+    math.push(katexHtml(tex, displayMode));
+    return `\x00M${math.length - 1}\x00`;
+  };
+  src = src.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => stash(tex, true));
+  src = src.replace(/\\\[([\s\S]+?)\\\]/g, (_, tex) => stash(tex, true));
+  src = src.replace(/\\\(([\s\S]+?)\\\)/g, (_, tex) => stash(tex, false));
+  src = src.replace(/\$(?!\s)([^$\n]+?)(?<!\s)\$/g, (_, tex) => stash(tex, false));
+  return { src, math };
+}
+
 /* ---------- tiny markdown renderer (no CDN, offline-safe) ---------- */
 
 function esc(s) {
@@ -16,6 +45,9 @@ function renderMarkdown(src) {
     fences.push(`<pre class="code"><code>${esc(code.replace(/\n$/, ""))}</code></pre>`);
     return `\x00F${fences.length - 1}\x00`;
   });
+
+  let math = [];
+  ({ src, math } = extractMath(src));
 
   const inline = (t) => esc(t)
     .replace(/\[(\d{1,2})\]/g, '<sup class="cite">[$1]</sup>')
@@ -41,6 +73,7 @@ function renderMarkdown(src) {
 
   let html = blocks.join("\n");
   html = html.replace(/\x00F(\d+)\x00/g, (_, i) => fences[Number(i)]);
+  html = html.replace(/\x00M(\d+)\x00/g, (_, i) => math[Number(i)] ?? "");
   return html;
 }
 

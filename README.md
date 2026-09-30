@@ -74,6 +74,8 @@ for analysis. Embeddings and reranking always run locally
 
 - **Ask the library** — streaming RAG chat. Answers cite retrieved chunks
   as `[n]`; source cards link to the exact arXiv paper, section, and page.
+  Math renders with KaTeX (vendored, works offline) for `$...$`,
+  `$$...$$`, `\(...\)` and `\[...\]` notation.
 - **Papers** — every downloaded paper with authors, categories, and chunk counts.
 - **Research runs** — start an autonomous multi-cycle exploration of any
   topic; watch the live pipeline log and the growing topic tree.
